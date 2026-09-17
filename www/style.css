@@ -131,3 +131,8 @@ h3.sec { font-size: 15px; color: var(--muted); margin: 18px 4px 10px; }
 .sub { display: block; color: var(--muted); font-size: 12px; direction: ltr; text-align: right; font-family: system-ui, sans-serif; }
 .credit { text-align: center; margin: 22px 0 4px; font-size: 13px; }
 .credit a { color: var(--muted); text-decoration: none; }
+
+.update { position: fixed; z-index: 20; left: 12px; right: 12px; bottom: calc(72px + env(safe-area-inset-bottom)); max-width: 696px; margin: 0 auto; display: flex; align-items: center; gap: 10px; padding: 12px 12px 12px 8px; background: var(--card); border: 1px solid var(--gold); border-radius: 16px; box-shadow: 0 8px 30px rgba(0,0,0,.18); animation: pop .35s ease; }
+.update div { flex: 1; font-size: 14px; line-height: 1.6; }
+.update small { display: block; color: var(--muted); font-size: 12px; }
+.update .x { border: 0; background: none; color: var(--muted); font-size: 16px; width: 32px; height: 32px; cursor: pointer; }

@@ -1,4 +1,6 @@
 (() => {
+  const APP_VERSION = { code: 3, name: "1.2" };
+  const UPDATE_URL = "https://azkar-hisn-almuslim.vercel.app/version.json";
   const { groups, cats } = window.AZKAR;
   const byId = Object.fromEntries(cats.map((c) => [c.id, c]));
   const $ = (s) => document.querySelector(s);
@@ -289,7 +291,7 @@
         نسألكم الدعاء لنا ولوالدينا.</div>
       <h3 class="sec">تواصل معي</h3>
       <div class="list">${SOCIAL.map(([i, n, h, u]) => `<a href="${u}" target="_blank" rel="noopener"><span class="si">${i}</span><span>${n}<small class="sub">${h}</small></span><span class="n">↖</span></a>`).join("")}</div>
-      <p class="empty" style="padding:24px 0">أذكار المسلم — الإصدار ١٫١</p>`;
+      <p class="empty" style="padding:24px 0">أذكار المسلم — الإصدار ${arNum(APP_VERSION.name).replace(".", "٫")}</p>`;
   }
 
   // ---------- router ----------
@@ -307,6 +309,25 @@
   }
   addEventListener("hashchange", route);
   route();
+
+  // ---------- update check (installed app / offline file only; the website is always current) ----------
+  const isInstalled = !!window.Capacitor?.isNativePlatform?.() || location.protocol === "file:";
+  async function checkUpdate() {
+    if (!isInstalled || !navigator.onLine) return;
+    try {
+      const ctrl = new AbortController();
+      setTimeout(() => ctrl.abort(), 8000);
+      const v = await (await fetch(UPDATE_URL + "?t=" + Date.now(), { cache: "no-store", signal: ctrl.signal })).json();
+      if (!(v.code > APP_VERSION.code) || sessionStorage.getItem("skipUpdate") === String(v.code)) return;
+      const bar = document.createElement("div");
+      bar.className = "update";
+      bar.innerHTML = `<div><b>🎉 يوجد تحديث جديد — الإصدار ${esc(arNum(v.name))}</b>${v.notes ? `<small>${esc(v.notes)}</small>` : ""}</div>
+        <a class="btn" href="${esc(v.url)}" target="_blank" rel="noopener">تحميل</a><button class="x" aria-label="لاحقًا">✕</button>`;
+      bar.querySelector(".x").onclick = () => { try { sessionStorage.setItem("skipUpdate", String(v.code)); } catch {} bar.remove(); };
+      document.body.appendChild(bar);
+    } catch {}
+  }
+  checkUpdate();
 
   if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js").catch(() => {});
 })();

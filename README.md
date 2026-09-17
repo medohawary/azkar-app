@@ -20,3 +20,12 @@
 
 ## البيانات
 مصدر النصوص: [rn0x/Adhkar-json](https://github.com/rn0x/Adhkar-json) (حصن المسلم). لإعادة بناء `www/data.js`: `npm run data`.
+
+## نشر تحديث جديد
+التطبيق المثبّت يتحقق عند فتحه (لو فيه إنترنت) من `version.json` ويُظهر شريط «يوجد تحديث جديد».
+
+    node scripts/release.js 1.3 "ملاحظات التحديث"
+    ANDROID_HOME=~/android-build/sdk JAVA_HOME=$(ls -d ~/android-build/jdk-*/Contents/Home) npm run android:build
+    node scripts/build-single.js
+    cp android/app/build/outputs/apk/release/app-release.apk www/azkar.apk
+    cd www && npx vercel deploy --prod
