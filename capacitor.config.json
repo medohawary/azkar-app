@@ -1,6 +1,8 @@
 {
   "appId": "com.hawary.azkar",
   "appName": "أذكار المسلم",
-  "webDir": "www",
-  "android": { "backgroundColor": "#f6f3ec" }
+  "webDir": "app-dist",
+  "android": {
+    "backgroundColor": "#f6f3ec"
+  }
 }
