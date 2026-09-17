@@ -76,6 +76,7 @@
         </div>
         <h3 class="sec">الأقسام</h3>
         <div class="list">${groups.map((g) => `<a href="#/g/${g.k}"><span>${g.i}</span>${g.t}<span class="n">${arNum(g.ids.length)}</span></a>`).join("")}</div>
+        <p class="credit"><a href="#/about">تطبيق غير ربحي · تطوير محمود هواري</a></p>
       </div>`;
     const q = $("#q");
     q.oninput = () => search(q.value.trim());
@@ -252,9 +253,10 @@
       <div class="row">الانتقال التلقائي للذكر التالي ${seg("autoNext", [[true, "تشغيل"], [false, "إيقاف"]])}</div>
       </div>
       <h3 class="sec">عن التطبيق</h3>
+      <div class="list" style="margin-bottom:12px"><a href="#/about"><span>👨‍💻</span>عن المطور<span class="n">محمود هواري</span></a></div>
       <div class="list"><div class="preview" style="font-size:15px;line-height:1.9">
         جميع الأذكار من كتاب <b>حصن المسلم</b> للشيخ سعيد بن علي بن وهف القحطاني — ${arNum(cats.length)} بابًا و${arNum(cats.reduce((a, c) => a + c.z.length, 0))} ذكرًا.<br>
-        يعمل التطبيق بدون إنترنت. اضغط على نص الذكر أو العداد للعد.</div></div>`;
+        يعمل التطبيق بدون إنترنت. اضغط على نص الذكر أو العداد للعد.<br>🤍 تطبيق مجاني غير ربحي — صدقة جارية.</div></div>`;
     view.onclick = (e) => {
       const b = e.target.closest("[data-k]");
       if (!b) return;
@@ -262,6 +264,32 @@
       settings[b.dataset.k] = v === "true" ? true : v === "false" ? false : isNaN(v) ? v : +v;
       saveSettings(); buzz(); settingsView();
     };
+  }
+
+
+  const SOCIAL = [
+    ["🌐", "الموقع الشخصي", "hawary.pro", "https://hawary.pro"],
+    ["💬", "واتساب", "+20 109 868 2610", "https://wa.me/201098682610"],
+    ["in", "LinkedIn", "Mahmoud Hawary", "https://www.linkedin.com/in/mahmoud-hawary-32a700232"],
+    ["📸", "Instagram", "@medohawary", "https://www.instagram.com/medohawary"],
+    ["🎵", "TikTok", "@mmhawary", "https://www.tiktok.com/@mmhawary"],
+    ["f", "Facebook", "Mahmoud Hawary", "https://www.facebook.com/share/1LtVTbvXUh/"],
+  ];
+  function about() {
+    currentTab = "settings"; setHeader("عن المطور", true);
+    view.innerHTML = `
+      <section class="dev">
+        <div class="avatar">MH</div>
+        <h2>محمود هواري</h2>
+        <p>Mahmoud Hawary</p>
+        <small>خبير تسويق إلكتروني ومتخصص ميديا باينج</small>
+      </section>
+      <div class="nonprofit"><b>🤍 تطبيق غير ربحي</b>
+        هذا التطبيق مجاني بالكامل وغير ربحي، بلا إعلانات ولا اشتراكات ولا جمع لأي بيانات، وصدقة جارية لوجه الله تعالى.
+        نسألكم الدعاء لنا ولوالدينا.</div>
+      <h3 class="sec">تواصل معي</h3>
+      <div class="list">${SOCIAL.map(([i, n, h, u]) => `<a href="${u}" target="_blank" rel="noopener"><span class="si">${i}</span><span>${n}<small class="sub">${h}</small></span><span class="n">↖</span></a>`).join("")}</div>
+      <p class="empty" style="padding:24px 0">أذكار المسلم — الإصدار ١٫١</p>`;
   }
 
   // ---------- router ----------
@@ -274,6 +302,7 @@
     else if (a === "fav") favorites();
     else if (a === "tasbih") tasbih();
     else if (a === "settings") settingsView();
+    else if (a === "about") about();
     else home();
   }
   addEventListener("hashchange", route);
