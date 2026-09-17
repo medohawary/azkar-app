@@ -4,7 +4,7 @@
   "private": true,
   "description": "أذكار المسلم — حصن المسلم كامل، خفيف ويعمل بدون إنترنت",
   "scripts": {
-    "data": "node scripts/build-data.js",
+    "data": "node scripts/build-data.js && node scripts/build-single.js",
     "start": "node scripts/serve.js 5391",
     "android:init": "npm i @capacitor/core @capacitor/cli @capacitor/android && npx cap add android",
     "android:sync": "npx cap sync android",
