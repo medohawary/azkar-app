@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "app.vercel.azkar_hisn_almuslim.twa",
+        "sha256_cert_fingerprints": ["A7:5B:3A:24:24:60:8A:2D:FC:93:39:00:E6:F9:8A:56:1E:E5:ED:AB:2D:47:DA:9A:99:FE:D3:4E:5C:B7:24:05"]
+      }
+    }]
