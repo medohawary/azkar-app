@@ -1,7 +1,20 @@
 (() => {
-  const APP_VERSION = { code: 3, name: "1.2" };
-  const UPDATE_URL = "https://azkar-hisn-almuslim.vercel.app/version.json";
-  const { groups, cats } = window.AZKAR;
+  const APP_VERSION = { code: 4, name: "1.3" };
+  const HOST = "https://azkar-hisn-almuslim.vercel.app";
+  const UPDATE_URL = HOST + "/version.json";
+  const CONTENT_URL = HOST + "/content.json";
+
+  // The bundled adhkar ship inside the app; a newer set downloaded earlier wins.
+  const bundled = window.AZKAR;
+  // Downloaded content is only used when it is complete; otherwise the app falls back to what it shipped with.
+  const usable = (c) => !!c && Array.isArray(c.cats) && c.cats.length > 100 && c.cats.every((x) => x.id && x.t && Array.isArray(x.z) && x.z.length)
+    && Array.isArray(c.groups) && c.groups.length && c.home && Array.isArray(c.home.quick) && c.home.quick.length
+    && Array.isArray(c.home.greetings) && c.home.greetings.length && typeof c.v === "number";
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem("content") || "null"); } catch {}
+  if (saved && !(saved.v > bundled.v && usable(saved))) { saved = null; try { localStorage.removeItem("content"); } catch {} }
+  const DATA = saved || bundled;
+  const { groups, cats, home: homeCfg } = DATA;
   const byId = Object.fromEntries(cats.map((c) => [c.id, c]));
   const $ = (s) => document.querySelector(s);
   const view = $("#view");
@@ -57,10 +70,8 @@
   function home() {
     currentTab = "home"; setHeader("أذكار المسلم");
     const h = new Date().getHours();
-    const s = h >= 3 && h < 12 ? ["صباح الخير", "حان وقت أذكار الصباح", 1]
-      : h >= 12 && h < 15 ? ["طاب يومك", "هل قرأت الأذكار بعد الصلاة؟", 27]
-      : h >= 15 && h < 21 ? ["مساء الخير", "حان وقت أذكار المساء", 1]
-      : ["تصبح على خير", "أذكار النوم قبل أن تنام", 2];
+    const g = homeCfg.greetings.find(([from, to]) => (from < to ? h >= from && h < to : h >= from || h < to)) || homeCfg.greetings[0];
+    const s = [g[2], g[3], g[4]];
     const c = byId[s[2]];
     view.innerHTML = `
       <section class="hero"><small>${s[0]}</small><h2>${s[1]}</h2>
@@ -69,11 +80,7 @@
       <div id="results"></div>
       <div id="homeBody">
         <div class="quick">
-          <a href="#/c/1"><span>🌅</span>الصباح والمساء</a>
-          <a href="#/c/2"><span>🌙</span>أذكار النوم</a>
-          <a href="#/c/27"><span>🕌</span>بعد الصلاة</a>
-          <a href="#/c/3"><span>⏰</span>الاستيقاظ</a>
-          <a href="#/c/129"><span>🤍</span>الاستغفار</a>
+          ${homeCfg.quick.map(([icon, label, id]) => `<a href="#/c/${id}"><span>${icon}</span>${esc(label)}</a>`).join("")}
           <a href="#/tasbih"><span>📿</span>السبحة</a>
         </div>
         <h3 class="sec">الأقسام</h3>
@@ -328,6 +335,20 @@
     } catch {}
   }
   checkUpdate();
+
+  // ---------- adhkar refresh: new/edited adhkar arrive on their own, no reinstall ----------
+  async function refreshContent() {
+    if (!navigator.onLine) return;
+    try {
+      const ctrl = new AbortController();
+      setTimeout(() => ctrl.abort(), 10000);
+      const c = await (await fetch(CONTENT_URL + "?t=" + Date.now(), { cache: "no-store", signal: ctrl.signal })).json();
+      if (!usable(c) || !(c.v > DATA.v)) return; // ignore anything older or malformed
+      localStorage.setItem("content", JSON.stringify(c));
+      toast("تم تحديث الأذكار — تظهر عند فتح التطبيق مرة أخرى");
+    } catch {}
+  }
+  setTimeout(refreshContent, 1500);
 
   if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js").catch(() => {});
 })();

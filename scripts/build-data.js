@@ -1,13 +1,24 @@
-// Builds www/data.js from data/raw.json (Hisn al-Muslim, rn0x/Adhkar-json)
+// Builds www/data.js (and www/content.json for over-the-air updates) from:
+//   data/raw.json            — Hisn al-Muslim (rn0x/Adhkar-json)
+//   data/morning-evening.json — morning/evening adhkar, already split (Seen-Arabic/Morning-And-Evening-Adhkar-DB)
 const fs = require("fs");
 const raw = require("../data/raw.json");
+const me = require("../data/morning-evening.json");
+
+const CONTENT_VERSION = 2; // bump whenever the adhkar/groups/home change
 
 const fixTitle = (t) =>
   t.replace(/[ﹰ-﻿ﭐ-﷿]+/g, (m) => m.normalize("NFKC"))
    .replace("مترلا", "منزلا").replace(/ُ\s?(?=[لغ])/g, "").replace(/\s+/g, " ").trim();
+const clean = (t) => t.replace(/\s+/g, " ").trim();
+
+// Repetitions stated inside the text but missing from the source's count field.
+const COUNT_FIXES = { 31: 3, 33: 3, 37: 3, 49: 7 };
+
+const MORNING_ID = 133, EVENING_ID = 134;
 
 const groups = [
-  ["daily", "أذكار اليوم والليلة", "☀️", [1, 2, 3, 29, 30, 31, 129, 130, 131, 107]],
+  ["daily", "أذكار اليوم والليلة", "☀️", [MORNING_ID, EVENING_ID, 2, 3, 29, 30, 31, 129, 130, 131, 107]],
   ["prayer", "الصلاة", "🕌", [18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 32, 33]],
   ["tahara", "الطهارة والمسجد والأذان", "💧", [4, 5, 6, 7, 10, 11, 12, 13]],
   ["home", "البيت واللباس والطعام", "🏠", [8, 9, 14, 15, 16, 17, 47, 48, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81]],
@@ -18,17 +29,55 @@ const groups = [
   ["social", "المعاملات والآداب", "🤝", [84, 85, 86, 87, 89, 90, 91, 93, 106, 108, 109, 110, 111, 112, 113, 114, 122, 123, 132]],
 ];
 
-const used = groups.flatMap((g) => g[3]);
-const missing = raw.map((c) => c.id).filter((id) => !used.includes(id));
-const dup = used.filter((id, i) => used.indexOf(id) !== i);
-if (missing.length || dup.length) throw new Error(`missing ${missing} dup ${dup}`);
+// Home screen: quick buttons, and the greeting that changes with the hour.
+const home = {
+  quick: [
+    ["🌅", "أذكار الصباح", MORNING_ID],
+    ["🌇", "أذكار المساء", EVENING_ID],
+    ["🌙", "أذكار النوم", 2],
+    ["🕌", "بعد الصلاة", 27],
+    ["⏰", "الاستيقاظ", 3],
+    ["🤍", "الاستغفار", 129],
+  ],
+  // [fromHour, toHour, greeting, line, categoryId]
+  greetings: [
+    [3, 12, "صباح الخير", "حان وقت أذكار الصباح", MORNING_ID],
+    [12, 15, "طاب يومك", "هل قرأت الأذكار بعد الصلاة؟", 27],
+    [15, 21, "مساء الخير", "حان وقت أذكار المساء", EVENING_ID],
+    [21, 3, "تصبح على خير", "أذكار النوم قبل أن تنام", 2],
+  ],
+};
 
-const cats = raw.map((c) => ({
+// --- Hisn al-Muslim chapters (the old combined morning/evening chapter is replaced below) ---
+const cats = raw.filter((c) => c.id !== 1).map((c) => ({
   id: c.id,
   t: fixTitle(c.category),
-  z: c.array.map((z) => [z.text.replace(/\s+/g, " ").trim(), z.count || 1]),
+  z: c.array.map((z) => {
+    let count = z.count || 1;
+    const fix = COUNT_FIXES[c.id];
+    if (fix && count === 1 && /\(?\s*(ثلاث|سبع)\s*مرات\s*\)?/.test(z.text.replace(/[ً-ٰٟـ]/g, ""))) count = fix;
+    return [clean(z.text), count];
+  }),
 }));
 
-const out = { groups: groups.map(([k, t, i, ids]) => ({ k, t, i, ids })), cats };
+// --- Morning / evening, each on its own page (type 0 = both, 1 = morning only, 2 = evening only) ---
+const pick = (types) => me
+  .filter((x) => types.includes(x.type))
+  .sort((a, b) => a.order - b.order)
+  .map((x) => [clean(x.content), x.count || 1]);
+
+cats.push({ id: MORNING_ID, t: "أذكار الصباح", z: pick([0, 1]) });
+cats.push({ id: EVENING_ID, t: "أذكار المساء", z: pick([0, 2]) });
+
+const used = groups.flatMap((g) => g[3]);
+const missing = cats.map((c) => c.id).filter((id) => !used.includes(id));
+const unknown = used.filter((id) => !cats.some((c) => c.id === id));
+const dup = used.filter((id, i) => used.indexOf(id) !== i);
+if (missing.length || unknown.length || dup.length) throw new Error(`missing ${missing} unknown ${unknown} dup ${dup}`);
+
+const out = { v: CONTENT_VERSION, groups: groups.map(([k, t, i, ids]) => ({ k, t, i, ids })), home, cats };
 fs.writeFileSync(__dirname + "/../www/data.js", "window.AZKAR=" + JSON.stringify(out) + ";");
-console.log("cats", cats.length, "items", cats.reduce((a, c) => a + c.z.length, 0), "bytes", fs.statSync(__dirname + "/../www/data.js").size);
+fs.writeFileSync(__dirname + "/../www/content.json", JSON.stringify(out));
+console.log("content v" + CONTENT_VERSION, "cats", cats.length, "items", cats.reduce((a, c) => a + c.z.length, 0),
+  "morning", pick([0, 1]).length, "evening", pick([0, 2]).length,
+  "bytes", fs.statSync(__dirname + "/../www/data.js").size);

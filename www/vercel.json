@@ -1,12 +1,43 @@
 {
   "headers": [
-    { "source": "/version.json", "headers": [
-      { "key": "Access-Control-Allow-Origin", "value": "*" },
-      { "key": "Cache-Control", "value": "no-store" }
-    ] },
-    { "source": "/azkar.apk", "headers": [
-      { "key": "Content-Disposition", "value": "attachment; filename=azkar.apk" },
-      { "key": "Cache-Control", "value": "no-cache" }
-    ] }
+    {
+      "source": "/content.json",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/version.json",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    },
+    {
+      "source": "/azkar.apk",
+      "headers": [
+        {
+          "key": "Content-Disposition",
+          "value": "attachment; filename=azkar.apk"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    }
   ]
 }
