@@ -29,3 +29,12 @@
     node scripts/build-single.js
     cp android/app/build/outputs/apk/release/app-release.apk www/azkar.apk
     cd www && npx vercel deploy --prod
+
+## الترخيص والمصادر
+- الكود تحت رخصة **MIT** (ملف `LICENSE`) — انسخه وعدّل فيه وانشره بحرية.
+- نصوص الأذكار من **حصن المسلم** للشيخ سعيد بن علي بن وهف القحطاني، وهي ليست ملكًا لهذا المشروع.
+- بيانات الأبواب العامة من [rn0x/Adhkar-json](https://github.com/rn0x/Adhkar-json) (بدون رخصة معلنة).
+- أذكار الصباح والمساء من [Seen-Arabic/Morning-And-Evening-Adhkar-DB](https://github.com/Seen-Arabic/Morning-And-Evening-Adhkar-DB) (رخصة MIT).
+- التطبيق **غير ربحي** ولا يجمع أي بيانات عن المستخدمين.
+
+> النصوص الشرعية تحتاج مراجعة من أهل العلم قبل الاعتماد عليها في نسخة منشورة.
