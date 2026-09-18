@@ -1,5 +1,5 @@
 (() => {
-  const APP_VERSION = { code: 5, name: "1.4" };
+  const APP_VERSION = { code: 6, name: "1.5" };
   const HOST = "https://azkar-hisn-almuslim.vercel.app";
   const UPDATE_URL = HOST + "/version.json";
   const CONTENT_URL = HOST + "/content.json";
@@ -85,6 +85,8 @@
           ${homeCfg.quick.map(([icon, label, id]) => `<a href="#/c/${id}"><span>${icon}</span>${esc(label)}</a>`).join("")}
           <a href="#/tasbih"><span>📿</span>السبحة</a>
           <a href="#/h"><span>📜</span>الأحاديث</a>
+          <a href="#/q"><span>❑</span>المصحف</a>
+          <a href="#/fav"><span>♡</span>المفضلة</a>
         </div>
         <h3 class="sec">الأقسام</h3>
         <div class="list">${groups.map((g) => `<a href="#/g/${g.k}"><span>${g.i}</span>${g.t}<span class="n">${arNum(g.ids.length)}</span></a>`).join("")}</div>
@@ -293,6 +295,78 @@
     ["🎵", "TikTok", "@mmhawary", "https://www.tiktok.com/@mmhawary"],
     ["f", "Facebook", "Mahmoud Hawary", "https://www.facebook.com/share/1LtVTbvXUh/"],
   ];
+  // ---------- mushaf ----------
+  // The Quran and its tafsir ship with the app but are loaded only when the section is opened.
+  let quran = null, tafsir = null;
+  async function loadQuran() {
+    if (quran && tafsir) return true;
+    try {
+      const [q, t] = await Promise.all([
+        fetch("quran.json").then((r) => r.json()),
+        fetch("tafsir.json").then((r) => r.json()),
+      ]);
+      if (!q.surahs || q.ayahs.length !== 6236 || t.ayahs.length !== 6236) return false;
+      quran = q; tafsir = t;
+      return true;
+    } catch { return false; }
+  }
+
+  async function quranIndex() {
+    currentTab = "quran"; setHeader("المصحف الشريف");
+    view.innerHTML = `<p class="empty">جارٍ فتح المصحف…</p>`;
+    if (!(await loadQuran())) { view.innerHTML = `<p class="empty">تعذّر فتح المصحف</p>`; return; }
+    const last = store.get("lastRead", null);
+    view.innerHTML = `
+      ${last && quran.surahs[last.s - 1] ? `<a class="hero cont" href="#/q/${last.s}/${last.a}"><small>متابعة القراءة</small><h2>${esc(quran.surahs[last.s - 1].t)} — الآية ${arNum(last.a)}</h2></a>` : ""}
+      <input class="search" id="qs" type="search" placeholder="ابحث باسم السورة أو رقمها…">
+      <div class="list" id="surahs">${quran.surahs.map(surahRow).join("")}</div>`;
+    const box = $("#qs");
+    box.oninput = () => {
+      const v = plain(box.value.trim());
+      $("#surahs").innerHTML = quran.surahs.filter((s) => !v || plain(s.t).includes(v) || String(s.n) === v || arNum(s.n) === v).map(surahRow).join("");
+    };
+  }
+  const surahRow = (s) => `<a href="#/q/${s.n}"><span class="sn">${arNum(s.n)}</span>${esc(s.t)}<span class="n">${s.p}، ${arNum(s.c)} ${s.c===1?"آية":s.c===2?"آيتان":"آيات"}</span></a>`;
+
+  async function surah(n, goto) {
+    n = Math.min(114, Math.max(1, +n || 1));
+    currentTab = "quran";
+    if (!(await loadQuran())) { view.innerHTML = `<p class="empty">تعذّر فتح المصحف</p>`; return; }
+    const s = quran.surahs[n - 1];
+    setHeader(s.t, true);
+    const showAll = store.get("showTafsir", false); // tafsir under every ayah, or only on tap
+    view.innerHTML = `
+      <div class="surah-head"><h2>${esc(s.t)}</h2><small>${s.p}، ${arNum(s.c)} ${s.c===1?"آية":s.c===2?"آيتان":"آيات"}</small>
+        ${n !== 9 ? `<p class="basmala">${esc(quran.ayahs[0])}</p>` : ""}</div>
+      <div class="tools"><button class="btn ghost" id="tafBtn">${showAll ? "✔ التفسير تحت كل آية" : "التفسير عند الضغط على الآية"}</button></div>
+      <div class="mushaf ${showAll ? "show-all" : ""}" id="mushaf">
+        ${Array.from({ length: s.c }, (_, i) => {
+          const g = s.s + i;
+          return `<section class="ayah" data-a="${i + 1}" id="a${i + 1}">
+            <p class="aya">${esc(quran.ayahs[g])} <span class="mark">${arNum(i + 1)}</span></p>
+            <div class="taf"><b>المختصر في التفسير</b>${esc(tafsir.ayahs[g])}</div></section>`;
+        }).join("")}
+      </div>
+      <div class="navs">
+        ${n > 1 ? `<a class="btn ghost" href="#/q/${n - 1}">← ${esc(quran.surahs[n - 2].t)}</a>` : "<span></span>"}
+        ${n < 114 ? `<a class="btn ghost" href="#/q/${n + 1}">${esc(quran.surahs[n].t)} →</a>` : "<span></span>"}
+      </div>`;
+    $("#tafBtn").onclick = () => {
+      const on = !store.get("showTafsir", false);
+      store.set("showTafsir", on);
+      $("#mushaf").classList.toggle("show-all", on);
+      $("#tafBtn").textContent = on ? "✔ التفسير تحت كل آية" : "التفسير عند الضغط على الآية";
+    };
+    view.onclick = (e) => {
+      const sec = e.target.closest(".ayah");
+      if (!sec) return;
+      sec.classList.toggle("open");
+      store.set("lastRead", { s: n, a: +sec.dataset.a });
+    };
+    if (goto) view.querySelector("#a" + (+goto))?.scrollIntoView({ block: "center" });
+    store.set("lastRead", { s: n, a: +goto || 1 });
+  }
+
   // ---------- hadiths ----------
   function hadithTopics() {
     currentTab = "hadith"; setHeader("الأحاديث النبوية");
@@ -364,6 +438,7 @@
     else if (a === "tasbih") tasbih();
     else if (a === "settings") settingsView();
     else if (a === "about") about();
+    else if (a === "q") (b ? surah(b, c) : quranIndex());
     else if (a === "h") (b ? hadithList(b) : hadithTopics());
     else if (a === "hd") hadith(b);
     else home();

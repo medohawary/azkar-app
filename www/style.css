@@ -148,3 +148,23 @@ ul.body li { margin-bottom: 8px; }
 .badges { margin-inline-start: auto; display: flex; gap: 6px; }
 .badges b { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 99px; background: var(--soft); color: var(--muted); }
 .badges b.grade { background: var(--brand); color: #fff; }
+
+.hero.cont { display: block; text-decoration: none; }
+.hero.cont h2 { margin-bottom: 0; }
+.list .sn { flex: none; width: 30px; height: 30px; border-radius: 9px; background: var(--soft); color: var(--brand); display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+
+.surah-head { text-align: center; padding: 16px; background: var(--card); border: 1px solid var(--line); border-radius: 18px; margin-bottom: 12px; }
+.surah-head h2 { margin: 0; font-size: 26px; color: var(--brand); }
+.surah-head small { color: var(--muted); }
+.basmala { font-size: 20px; margin: 12px 0 0; line-height: 2; }
+.mushaf { background: var(--card); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; box-shadow: var(--shadow); }
+.ayah { border-bottom: 1px solid var(--line); cursor: pointer; }
+.ayah:last-child { border-bottom: 0; }
+.ayah .aya { margin: 0; padding: 16px; font-size: var(--fs); line-height: 2.2; text-align: justify; }
+.ayah .mark { display: inline-grid; place-items: center; width: 30px; height: 30px; font-size: 12px; color: var(--brand); border: 1px solid var(--gold); border-radius: 50%; vertical-align: middle; font-family: system-ui, sans-serif; }
+.ayah.open { background: var(--soft); }
+.ayah .taf { display: none; padding: 0 16px 16px; font-size: 15px; line-height: 2; color: var(--ink); border-top: 1px dashed var(--line); }
+.ayah.open .taf { display: block; padding-top: 12px; }
+.ayah .taf b { display: block; color: var(--brand); font-size: 13px; margin-bottom: 4px; }
+.mushaf.show-all .ayah .taf { display: block; padding-top: 12px; }
+.navs { display: flex; justify-content: space-between; gap: 10px; margin: 16px 0 6px; }
