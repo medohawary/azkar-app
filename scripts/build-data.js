@@ -4,8 +4,9 @@
 const fs = require("fs");
 const raw = require("../data/raw.json");
 const me = require("../data/morning-evening.json");
+const hadithTopics = require("../data/hadiths-raw.json");
 
-const CONTENT_VERSION = 2; // bump whenever the adhkar/groups/home change
+const CONTENT_VERSION = 3; // bump whenever the adhkar/groups/home change
 
 const fixTitle = (t) =>
   t.replace(/[ﹰ-﻿ﭐ-﷿]+/g, (m) => m.normalize("NFKC"))
@@ -69,15 +70,41 @@ const pick = (types) => me
 cats.push({ id: MORNING_ID, t: "أذكار الصباح", z: pick([0, 1]) });
 cats.push({ id: EVENING_ID, t: "أذكار المساء", z: pick([0, 2]) });
 
+// --- Hadiths: only what the encyclopedia itself grades صحيح and traces to al-Bukhari/Muslim ---
+const authentic = (h) =>
+  h.grade === "صحيح" &&
+  /^(متفق عليه|رواه البخاري|رواه مسلم|رواه البخاري ومسلم)\.?$/.test((h.attribution || "").trim()) &&
+  typeof h.explanation === "string" && h.explanation.length > 50 &&
+  typeof h.hadeeth === "string" && h.hadeeth.length > 30;
+
+const hadiths = { topics: [], items: [] };
+hadithTopics.forEach((t) => {
+  const kept = t.items.filter(authentic).slice(0, t.take);
+  if (!kept.length) return;
+  hadiths.topics.push({ k: "t" + t.id, t: t.title, i: t.icon, ids: kept.map((h) => +h.id) });
+  kept.forEach((h) => hadiths.items.push({
+    id: +h.id,
+    t: clean(h.title),
+    h: clean(h.hadeeth),
+    a: clean(h.attribution),
+    g: clean(h.grade),
+    e: clean(h.explanation),
+    f: (h.hints || []).map(clean).filter(Boolean),
+    r: (h.reference || "").split("\n").map(clean).filter(Boolean).slice(0, 2),
+    u: "https://hadeethenc.com/ar/browse/hadith/" + h.id,
+  }));
+});
+if (hadiths.items.some((h) => !authentic({ grade: h.g, attribution: h.a, explanation: h.e, hadeeth: h.h }))) throw new Error("ungraded hadith slipped through");
+
 const used = groups.flatMap((g) => g[3]);
 const missing = cats.map((c) => c.id).filter((id) => !used.includes(id));
 const unknown = used.filter((id) => !cats.some((c) => c.id === id));
 const dup = used.filter((id, i) => used.indexOf(id) !== i);
 if (missing.length || unknown.length || dup.length) throw new Error(`missing ${missing} unknown ${unknown} dup ${dup}`);
 
-const out = { v: CONTENT_VERSION, groups: groups.map(([k, t, i, ids]) => ({ k, t, i, ids })), home, cats };
+const out = { v: CONTENT_VERSION, groups: groups.map(([k, t, i, ids]) => ({ k, t, i, ids })), home, cats, hadiths };
 fs.writeFileSync(__dirname + "/../www/data.js", "window.AZKAR=" + JSON.stringify(out) + ";");
 fs.writeFileSync(__dirname + "/../www/content.json", JSON.stringify(out));
-console.log("content v" + CONTENT_VERSION, "cats", cats.length, "items", cats.reduce((a, c) => a + c.z.length, 0),
+console.log("content v" + CONTENT_VERSION, "hadiths", hadiths.items.length, "in", hadiths.topics.length, "topics,", "cats", cats.length, "items", cats.reduce((a, c) => a + c.z.length, 0),
   "morning", pick([0, 1]).length, "evening", pick([0, 2]).length,
   "bytes", fs.statSync(__dirname + "/../www/data.js").size);

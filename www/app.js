@@ -1,5 +1,5 @@
 (() => {
-  const APP_VERSION = { code: 4, name: "1.3" };
+  const APP_VERSION = { code: 5, name: "1.4" };
   const HOST = "https://azkar-hisn-almuslim.vercel.app";
   const UPDATE_URL = HOST + "/version.json";
   const CONTENT_URL = HOST + "/content.json";
@@ -15,6 +15,8 @@
   if (saved && !(saved.v > bundled.v && usable(saved))) { saved = null; try { localStorage.removeItem("content"); } catch {} }
   const DATA = saved || bundled;
   const { groups, cats, home: homeCfg } = DATA;
+  const hadiths = DATA.hadiths || { topics: [], items: [] };
+  const hadithById = Object.fromEntries(hadiths.items.map((h) => [h.id, h]));
   const byId = Object.fromEntries(cats.map((c) => [c.id, c]));
   const $ = (s) => document.querySelector(s);
   const view = $("#view");
@@ -82,6 +84,7 @@
         <div class="quick">
           ${homeCfg.quick.map(([icon, label, id]) => `<a href="#/c/${id}"><span>${icon}</span>${esc(label)}</a>`).join("")}
           <a href="#/tasbih"><span>📿</span>السبحة</a>
+          <a href="#/h"><span>📜</span>الأحاديث</a>
         </div>
         <h3 class="sec">الأقسام</h3>
         <div class="list">${groups.map((g) => `<a href="#/g/${g.k}"><span>${g.i}</span>${g.t}<span class="n">${arNum(g.ids.length)}</span></a>`).join("")}</div>
@@ -104,6 +107,12 @@
         const at = p.indexOf(pq);
         if (at > -1 && hits.length < 60) hits.push(`<a href="#/c/${c.id}/${i}">${esc(p.slice(Math.max(0, at - 30), at + 60))}…<span class="n">${esc(c.t.slice(0, 18))}</span></a>`);
       });
+    });
+    hadiths.items.forEach((h) => {
+      if (hits.length >= 80) return;
+      const p = plain(h.t + " " + h.h);
+      const at = p.indexOf(pq);
+      if (at > -1) hits.push(`<a href="#/hd/${h.id}">📜 ${esc(h.t)}<span class="n">حديث</span></a>`);
     });
     res.innerHTML = hits.length ? `<div class="list">${hits.join("")}</div>` : `<p class="empty">لا توجد نتائج</p>`;
   }
@@ -284,6 +293,49 @@
     ["🎵", "TikTok", "@mmhawary", "https://www.tiktok.com/@mmhawary"],
     ["f", "Facebook", "Mahmoud Hawary", "https://www.facebook.com/share/1LtVTbvXUh/"],
   ];
+  // ---------- hadiths ----------
+  function hadithTopics() {
+    currentTab = "hadith"; setHeader("الأحاديث النبوية");
+    view.innerHTML = `
+      <p class="note">${arNum(hadiths.items.length)} حديثًا، كلها <b>صحيحة</b> من صحيحَي البخاري ومسلم، ومعها شرحها وفوائدها من <a href="https://hadeethenc.com/ar/home" target="_blank" rel="noopener">الموسوعة الحديثية</a>.</p>
+      <div class="list">${hadiths.topics.map((t) => `<a href="#/h/${t.k}"><span>${t.i}</span>${esc(t.t)}<span class="n">${arNum(t.ids.length)}</span></a>`).join("")}</div>`;
+  }
+
+  function hadithList(k) {
+    const t = hadiths.topics.find((x) => x.k === k);
+    if (!t) return hadithTopics();
+    currentTab = "hadith"; setHeader(t.t, true);
+    view.innerHTML = `<div class="list">${t.ids.map((id) => {
+      const h = hadithById[id];
+      return h ? `<a href="#/hd/${h.id}">${esc(h.t)}</a>` : "";
+    }).join("")}</div>`;
+  }
+
+  function hadith(id) {
+    const h = hadithById[+id];
+    if (!h) return hadithTopics();
+    currentTab = "hadith"; setHeader(h.t, true);
+    view.innerHTML = `
+      <article class="zk"><div class="txt" style="cursor:auto">${esc(h.h)}</div>
+        <div class="foot">
+          <button class="act" data-act="copy" aria-label="نسخ">⧉</button>
+          <button class="act" data-act="share" aria-label="مشاركة">↗</button>
+          <span class="badges"><b class="grade">${esc(h.g)}</b><b>${esc(h.a)}</b></span>
+        </div></article>
+      <h3 class="sec">الشرح</h3>
+      <div class="list"><div class="body">${esc(h.e)}</div></div>
+      ${h.f.length ? `<h3 class="sec">من فوائد الحديث</h3><div class="list"><ul class="body">${h.f.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div>` : ""}
+      <h3 class="sec">المصدر</h3>
+      <div class="list"><div class="body ref">${h.r.map(esc).join("<br>")}
+        <a href="${esc(h.u)}" target="_blank" rel="noopener">راجع الحديث في الموسوعة الحديثية ↖</a></div></div>`;
+    view.onclick = (e) => {
+      const act = e.target.closest("[data-act]")?.dataset.act;
+      const text = `${h.h}\n[${h.a}]`;
+      if (act === "copy") copy(text);
+      if (act === "share") share(text, h.t);
+    };
+  }
+
   function about() {
     currentTab = "settings"; setHeader("عن المطور", true);
     view.innerHTML = `
@@ -312,6 +364,8 @@
     else if (a === "tasbih") tasbih();
     else if (a === "settings") settingsView();
     else if (a === "about") about();
+    else if (a === "h") (b ? hadithList(b) : hadithTopics());
+    else if (a === "hd") hadith(b);
     else home();
   }
   addEventListener("hashchange", route);
