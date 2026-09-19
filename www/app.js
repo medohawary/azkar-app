@@ -1,5 +1,5 @@
 (() => {
-  const APP_VERSION = { code: 6, name: "1.5" };
+  const APP_VERSION = { code: 7, name: "2.0" };
   const HOST = "https://azkar-hisn-almuslim.vercel.app";
   const UPDATE_URL = HOST + "/version.json";
   const CONTENT_URL = HOST + "/content.json";
@@ -78,7 +78,8 @@
     view.innerHTML = `
       <section class="hero"><small>${s[0]}</small><h2>${s[1]}</h2>
         <a class="btn" href="#/c/${c.id}">${catDone(c) ? "✔ أتممتها اليوم — اقرأ مجددًا" : "ابدأ الآن ←"}</a></section>
-      <input class="search" id="q" type="search" placeholder="ابحث في الأذكار والأدعية…">
+      ${prayerStrip()}
+      <input class="search" id="q" type="search" placeholder="ابحث في الأذكار والقرآن والأحاديث…">
       <div id="results"></div>
       <div id="homeBody">
         <div class="quick">
@@ -87,6 +88,8 @@
           <a href="#/h"><span>📜</span>الأحاديث</a>
           <a href="#/q"><span>❑</span>المصحف</a>
           <a href="#/fav"><span>♡</span>المفضلة</a>
+          <a href="#/prayer"><span>🕌</span>مواقيت الصلاة</a>
+          <a href="#/reminders"><span>🔔</span>التنبيهات</a>
         </div>
         <h3 class="sec">الأقسام</h3>
         <div class="list">${groups.map((g) => `<a href="#/g/${g.k}"><span>${g.i}</span>${g.t}<span class="n">${arNum(g.ids.length)}</span></a>`).join("")}</div>
@@ -94,6 +97,12 @@
       </div>`;
     const q = $("#q");
     q.oninput = () => search(q.value.trim());
+  }
+
+  function prayerStrip() {
+    const n = place() && window.adhan ? nextPrayer() : null;
+    if (!n) return '<a class="pstrip" href="#/prayer">\u{1F54C} <b>\u0645\u0648\u0627\u0642\u064a\u062a \u0627\u0644\u0635\u0644\u0627\u0629</b><span>\u0627\u062e\u062a\u0631 \u0645\u062f\u064a\u0646\u062a\u0643 \u2190</span></a>';
+    return `<a class="pstrip" href="#/prayer">\u{1F54C} <b>${n.name}</b><span>${fmtTime(n.at)} \u00b7 \u0628\u0639\u062f ${remain(n.at)}</span></a>`;
   }
 
   function search(q) {
@@ -116,7 +125,23 @@
       const at = p.indexOf(pq);
       if (at > -1) hits.push(`<a href="#/hd/${h.id}">📜 ${esc(h.t)}<span class="n">حديث</span></a>`);
     });
-    res.innerHTML = hits.length ? `<div class="list">${hits.join("")}</div>` : `<p class="empty">لا توجد نتائج</p>`;
+    const ayahHits = quran ? searchAyahs(pq) : [];
+    res.innerHTML = hits.length || ayahHits.length
+      ? `<div class="list">${hits.concat(ayahHits).join("")}</div>${quran ? "" : `<p class="note" id="qhint">جارٍ تجهيز البحث في المصحف…</p>`}`
+      : `<p class="empty">لا توجد نتائج</p>`;
+    // The mushaf is a big file, so it is pulled in the first time someone searches.
+    if (!quran) loadQuran().then((ok) => { if (ok && $("#q")?.value.trim() === q) search(q); });
+  }
+
+  function searchAyahs(pq) {
+    const out = [];
+    for (let g = 0; g < quran.ayahs.length && out.length < 40; g++) {
+      if (plain(quran.ayahs[g]).includes(pq)) {
+        const r = ayahRef(g);
+        out.push(`<a href="#/q/${r.s}/${r.a}">۝ ${esc(quran.ayahs[g].slice(0, 70))}…<span class="n">${esc(r.t)} ${arNum(r.a)}</span></a>`);
+      }
+    }
+    return out;
   }
 
   function allCats() {
@@ -162,6 +187,7 @@
       if (act === "fav") return toggleFav(c.id, i, e.target.closest("button"));
       if (act === "copy") return copy(z[0]);
       if (act === "share") return share(z[0], c.t);
+      if (act === "img") return shareImage(z[0], c.t);
       if (!e.target.closest(".txt, .count")) return;
       if ((p[i] || 0) >= z[1]) return;
       p[i] = (p[i] || 0) + 1;
@@ -191,6 +217,7 @@
         <button class="act ${fav ? "on" : ""}" data-act="fav" aria-label="مفضلة">${fav ? "♥" : "♡"}</button>
         <button class="act" data-act="copy" aria-label="نسخ">⧉</button>
         <button class="act" data-act="share" aria-label="مشاركة">↗</button>
+        <button class="act" data-act="img" aria-label="مشاركة كصورة">🖼</button>
         <button class="count" aria-label="عدّ"><small>${z[1] > 1 ? "التكرار " + arNum(z[1]) : "مرة واحدة"}</small>
           <span class="ring" style="--p:${(Math.min(n, z[1]) / z[1]) * 100}"><b>${done ? "✔" : arNum(z[1] - n)}</b></span></button>
       </div></article>`;
@@ -219,6 +246,62 @@
     if (navigator.share) { try { await navigator.share({ title, text }); } catch {} } else copy(text);
   }
 
+  // --- render a verse/dhikr as a shareable square image ---
+  function drawCard(text, caption) {
+    const S = 1080, c = document.createElement("canvas");
+    c.width = c.height = S;
+    const x = c.getContext("2d");
+    const g = x.createLinearGradient(0, 0, S, S);
+    g.addColorStop(0, "#0f5f4f"); g.addColorStop(1, "#17826b");
+    x.fillStyle = g; x.fillRect(0, 0, S, S);
+    x.strokeStyle = "rgba(201,162,77,.85)"; x.lineWidth = 4;
+    x.strokeRect(46, 46, S - 92, S - 92);
+    x.fillStyle = "#fff"; x.textAlign = "center"; x.direction = "rtl";
+
+    // shrink until the text fits inside the frame
+    let size = text.length < 80 ? 78 : text.length < 200 ? 62 : 52, lines = [];
+    const wrap = (fs) => {
+      x.font = `${fs}px "Noto Naskh Arabic", "Geeza Pro", serif`;
+      const max = S - 200, out = [];
+      let line = "";
+      for (const w of text.split(/\s+/)) {
+        const t = line ? line + " " + w : w;
+        if (x.measureText(t).width > max && line) { out.push(line); line = w; } else line = t;
+      }
+      if (line) out.push(line);
+      return out;
+    };
+    do { lines = wrap(size); size -= 3; } while (lines.length * (size * 1.9) > S - 320 && size > 20);
+
+    const lh = size * 1.9, startY = S / 2 - ((lines.length - 1) * lh) / 2 - 20;
+    lines.forEach((l, i) => x.fillText(l, S / 2, startY + i * lh));
+    x.font = '30px "Noto Naskh Arabic", "Geeza Pro", serif';
+    x.fillStyle = "rgba(255,255,255,.85)";
+    x.fillText(caption, S / 2, S - 120);
+    x.font = '24px system-ui, sans-serif';
+    x.fillStyle = "rgba(255,255,255,.55)";
+    x.fillText("azkar-hisn-almuslim.vercel.app", S / 2, S - 70);
+    return c;
+  }
+
+  async function shareImage(text, caption) {
+    try {
+      const canvas = drawCard(text, caption);
+      const blob = await new Promise((r) => canvas.toBlob(r, "image/png"));
+      const file = new File([blob], "ayah.png", { type: "image/png" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: caption });
+        return;
+      }
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "azkar.png";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      toast("تم حفظ الصورة");
+    } catch { toast("تعذّر إنشاء الصورة"); }
+  }
+
   function favorites() {
     currentTab = "fav"; setHeader("المفضلة");
     const items = favs.map((f) => f.split(":").map(Number)).filter(([c, i]) => byId[c]?.z[i]);
@@ -232,15 +315,22 @@
       if (act === "fav") return toggleFav(c, i, e.target.closest("button"));
       if (act === "copy") return copy(z[0]);
       if (act === "share") return share(z[0], byId[c].t);
+      if (act === "img") return shareImage(z[0], byId[c].t);
     };
   }
 
   const TASBIH = ["سُبْحَانَ اللَّهِ", "الْحَمْدُ لِلَّهِ", "اللَّهُ أَكْبَرُ", "لَا إِلَهَ إِلَّا اللَّهُ", "أَسْتَغْفِرُ اللَّهَ", "سُبْحَانَ اللَّهِ وَبِحَمْدِهِ", "لَا حَوْلَ وَلَا قُوَّةَ إِلَّا بِاللَّهِ", "اللَّهُمَّ صَلِّ عَلَى مُحَمَّدٍ"];
   function tasbih() {
     currentTab = "tasbih"; setHeader("السبحة الإلكترونية");
-    const t = Object.assign({ i: 0, n: 0, target: 33, total: 0, day: today(), todayN: 0 }, store.get("tasbih", {}));
+    const t = Object.assign({ i: 0, n: 0, target: 33, total: 0, day: today(), todayN: 0, log: {} }, store.get("tasbih", {}));
     if (t.day !== today()) { t.day = today(); t.todayN = 0; }
-    const save = () => store.set("tasbih", t);
+    if (!t.log) t.log = {};
+    const save = () => {
+      t.log[today()] = t.todayN;
+      const keep = lastDays(30);
+      Object.keys(t.log).forEach((d) => { if (!keep.includes(d)) delete t.log[d]; });
+      store.set("tasbih", t);
+    };
     const render = () => {
       view.innerHTML = `<div class="tasbih">
         <div class="chips">${TASBIH.map((x, i) => `<button class="chip ${i === t.i ? "on" : ""}" data-i="${i}">${x}</button>`).join("")}</div>
@@ -248,7 +338,8 @@
         <button class="bead" id="bead">${arNum(t.n)}<small>${t.target ? "من " + arNum(t.target) : "بلا حد"}</small></button>
         <div class="stats"><div><b>${arNum(t.todayN)}</b><small>اليوم</small></div><div><b>${arNum(t.total)}</b><small>الإجمالي</small></div></div>
         <div class="seg" style="display:inline-flex">${[33, 100, 1000, 0].map((v) => `<button data-t="${v}" class="${t.target === v ? "on" : ""}">${v ? arNum(v) : "∞"}</button>`).join("")}</div>
-        <p><button class="btn ghost" id="tReset">↺ تصفير</button></p></div>`;
+        <p><button class="btn ghost" id="tReset">↺ تصفير</button></p>
+        ${weekChart(t)}</div>`;
       $("#bead").onclick = () => {
         t.n++; t.total++; t.todayN++;
         if (t.target && t.n >= t.target) { buzz([40, 50, 40]); toast("أتممت " + arNum(t.target) + " — بارك الله فيك"); t.n = 0; } else buzz(12);
@@ -262,6 +353,25 @@
     render();
   }
 
+  const lastDays = (n) => Array.from({ length: n }, (_, i) => {
+    const d = new Date(); d.setDate(d.getDate() - (n - 1 - i));
+    return d.toLocaleDateString("en-CA");
+  });
+  const DAY_NAMES = ["أحد", "إثنين", "ثلاثاء", "أربعاء", "خميس", "جمعة", "سبت"];
+
+  function weekChart(t) {
+    const days = lastDays(7);
+    const log = { ...(t.log || {}), [today()]: t.todayN };
+    const max = Math.max(1, ...days.map((d) => log[d] || 0));
+    const week = days.reduce((a, d) => a + (log[d] || 0), 0);
+    return `<h3 class="sec">آخر ٧ أيام — ${arNum(week)} تسبيحة</h3>
+      <div class="chart">${days.map((d) => {
+        const v = log[d] || 0;
+        return `<div class="col"><b>${v ? arNum(v) : ""}</b><i style="height:${Math.round((v / max) * 86) + 4}px"></i>
+          <small>${DAY_NAMES[new Date(d + "T00:00").getDay()]}</small></div>`;
+      }).join("")}</div>`;
+  }
+
   function settingsView() {
     currentTab = "settings"; setHeader("الإعدادات");
     const seg = (key, opts) => `<div class="seg">${opts.map(([v, l]) => `<button data-k="${key}" data-v="${v}" class="${String(settings[key]) === String(v) ? "on" : ""}">${l}</button>`).join("")}</div>`;
@@ -272,11 +382,18 @@
       <div class="row">الاهتزاز عند العد ${seg("vibrate", [[true, "تشغيل"], [false, "إيقاف"]])}</div>
       <div class="row">الانتقال التلقائي للذكر التالي ${seg("autoNext", [[true, "تشغيل"], [false, "إيقاف"]])}</div>
       </div>
+      <h3 class="sec">أقسام أخرى</h3>
+      <div class="list" style="margin-bottom:12px">
+        <a href="#/reminders"><span>🔔</span>التنبيهات<span class="n">الصباح والمساء والنوم</span></a>
+        <a href="#/prayer/setup"><span>📍</span>المدينة وطريقة حساب المواقيت</a>
+        <a href="#/tasbih"><span>📿</span>السبحة</a>
+        <a href="#/fav"><span>♡</span>المفضلة</a>
+        <a href="#/khatma"><span>📖</span>الختمة</a>
+      </div>
       <h3 class="sec">عن التطبيق</h3>
       <div class="list" style="margin-bottom:12px"><a href="#/about"><span>👨‍💻</span>عن المطور<span class="n">محمود هواري</span></a></div>
       <div class="list"><div class="preview" style="font-size:15px;line-height:1.9">
-        جميع الأذكار من كتاب <b>حصن المسلم</b> للشيخ سعيد بن علي بن وهف القحطاني — ${arNum(cats.length)} بابًا و${arNum(cats.reduce((a, c) => a + c.z.length, 0))} ذكرًا.<br>
-        يعمل التطبيق بدون إنترنت. اضغط على نص الذكر أو العداد للعد.<br>🤍 تطبيق مجاني غير ربحي — صدقة جارية.</div></div>`;
+        يشمل التطبيق: <b>المصحف الشريف</b> كاملًا بتفسيرين، و<b>حصن المسلم</b> كاملًا، و<b>أحاديث صحيحة</b> بشرحها، ومواقيت الصلاة، والتنبيهات، والسبحة.<br>كل شيء يعمل بدون إنترنت.<br>🤍 تطبيق مجاني غير ربحي — صدقة جارية.</div></div>`;
     view.onclick = (e) => {
       const b = e.target.closest("[data-k]");
       if (!b) return;
@@ -296,37 +413,127 @@
     ["f", "Facebook", "Mahmoud Hawary", "https://www.facebook.com/share/1LtVTbvXUh/"],
   ];
   // ---------- mushaf ----------
-  // The Quran and its tafsir ship with the app but are loaded only when the section is opened.
-  let quran = null, tafsir = null;
+  // The Quran and its tafsirs ship with the app but are loaded only when the section is opened.
+  const TAFSIRS = [{ id: 1, file: "tafsir.json", t: "المختصر في التفسير" }, { id: 2, file: "tafsir2.json", t: "التفسير الميسر" }];
+  let quran = null;
+  const tafsirCache = {};
+  const tafsirId = () => (store.get("tafsirId", 1) === 2 ? 2 : 1);
+  const tafsirMeta = () => TAFSIRS.find((t) => t.id === tafsirId());
+
   async function loadQuran() {
-    if (quran && tafsir) return true;
     try {
-      const [q, t] = await Promise.all([
-        fetch("quran.json").then((r) => r.json()),
-        fetch("tafsir.json").then((r) => r.json()),
-      ]);
-      if (!q.surahs || q.ayahs.length !== 6236 || t.ayahs.length !== 6236) return false;
-      quran = q; tafsir = t;
+      if (!quran) {
+        const q = await fetch("quran.json").then((r) => r.json());
+        if (!q.surahs || q.ayahs.length !== 6236) return false;
+        quran = q;
+      }
+      const m = tafsirMeta();
+      if (!tafsirCache[m.id]) {
+        const t = await fetch(m.file).then((r) => r.json());
+        if (!t.ayahs || t.ayahs.length !== 6236) return false;
+        tafsirCache[m.id] = t;
+      }
       return true;
     } catch { return false; }
   }
+  const tafsirOf = (g) => (tafsirCache[tafsirId()]?.ayahs[g] || "");
+  const ayahRef = (g) => { const s = quran.surahs.filter((x) => x.s <= g).pop(); return { s: s.n, t: s.t, a: g - s.s + 1 }; };
+  const pageOf = (g) => { let p = 1; for (let i = 0; i < quran.pages.length; i++) if (quran.pages[i] <= g) p = i + 1; return p; };
 
-  async function quranIndex() {
+  let bookmarks = store.get("bookmarks", []); // global ayah indexes
+  const isMarked = (g) => bookmarks.includes(g);
+  function toggleBookmark(g, btn) {
+    const on = !isMarked(g);
+    bookmarks = on ? [...bookmarks, g].sort((a, b) => a - b) : bookmarks.filter((x) => x !== g);
+    store.set("bookmarks", bookmarks);
+    if (btn) { btn.classList.toggle("on", on); btn.textContent = on ? "★" : "☆"; }
+    buzz(); toast(on ? "أُضيفت إلى المحفوظات" : "حُذفت من المحفوظات");
+  }
+
+  async function quranIndex(mode) {
     currentTab = "quran"; setHeader("المصحف الشريف");
     view.innerHTML = `<p class="empty">جارٍ فتح المصحف…</p>`;
     if (!(await loadQuran())) { view.innerHTML = `<p class="empty">تعذّر فتح المصحف</p>`; return; }
+    mode = ["surah", "juz", "hizb", "marks"].includes(mode) ? mode : "surah";
     const last = store.get("lastRead", null);
     view.innerHTML = `
       ${last && quran.surahs[last.s - 1] ? `<a class="hero cont" href="#/q/${last.s}/${last.a}"><small>متابعة القراءة</small><h2>${esc(quran.surahs[last.s - 1].t)} — الآية ${arNum(last.a)}</h2></a>` : ""}
-      <input class="search" id="qs" type="search" placeholder="ابحث باسم السورة أو رقمها…">
-      <div class="list" id="surahs">${quran.surahs.map(surahRow).join("")}</div>`;
+      ${khatmaCard()}
+      <div class="chips segchips">
+        ${[["surah", "السور"], ["juz", "الأجزاء"], ["hizb", "الأحزاب"], ["marks", "المحفوظات"]].map(([k, t]) =>
+          `<a class="chip ${k === mode ? "on" : ""}" href="#/q${k === "surah" ? "" : "/m/" + k}">${t}</a>`).join("")}
+      </div>
+      ${mode === "surah" ? `<input class="search" id="qs" type="search" placeholder="ابحث باسم السورة أو رقمها…">` : ""}
+      <div class="list" id="qlist">${indexRows(mode)}</div>`;
     const box = $("#qs");
-    box.oninput = () => {
+    if (box) box.oninput = () => {
       const v = plain(box.value.trim());
-      $("#surahs").innerHTML = quran.surahs.filter((s) => !v || plain(s.t).includes(v) || String(s.n) === v || arNum(s.n) === v).map(surahRow).join("");
+      $("#qlist").innerHTML = quran.surahs.filter((s) => !v || plain(s.t).includes(v) || String(s.n) === v || arNum(s.n) === v).map(surahRow).join("");
+    };
+    view.onclick = (e) => {
+      const b = e.target.closest("[data-unmark]");
+      if (!b) return;
+      e.preventDefault();
+      toggleBookmark(+b.dataset.unmark);
+      quranIndex("marks");
     };
   }
-  const surahRow = (s) => `<a href="#/q/${s.n}"><span class="sn">${arNum(s.n)}</span>${esc(s.t)}<span class="n">${s.p}، ${arNum(s.c)} ${s.c===1?"آية":s.c===2?"آيتان":"آيات"}</span></a>`;
+
+  function indexRows(mode) {
+    if (mode === "surah") return quran.surahs.map(surahRow).join("");
+    if (mode === "marks") {
+      if (!bookmarks.length) return `<p class="empty">☆<br>اضغط على نجمة الآية لحفظها هنا</p>`;
+      return bookmarks.map((g) => {
+        const r = ayahRef(g);
+        return `<a href="#/q/${r.s}/${r.a}"><span class="mini">${esc(quran.ayahs[g].slice(0, 60))}…</span>
+          <span class="n">${esc(r.t)} ${arNum(r.a)}</span><button class="act" data-unmark="${g}" aria-label="حذف">✕</button></a>`;
+      }).join("");
+    }
+    const list = mode === "juz" ? quran.juz : quran.hizb;
+    return list.map((x) => {
+      const r = ayahRef(x.s);
+      return `<a href="#/q/${r.s}/${r.a}"><span class="sn">${arNum(x.n)}</span>${mode === "juz" ? "الجزء" : "الحزب"} ${arNum(x.n)}<span class="n">${esc(r.t)} ${arNum(r.a)}</span></a>`;
+    }).join("");
+  }
+  const surahRow = (s) => `<a href="#/q/${s.n}"><span class="sn">${arNum(s.n)}</span>${esc(s.t)}<span class="n">${s.p}، ${arNum(s.c)} ${s.c === 1 ? "آية" : s.c === 2 ? "آيتان" : "آيات"}</span></a>`;
+
+  // --- khatma: a daily page target, tracked by how far the reader has reached ---
+  function khatmaCard() {
+    const k = store.get("khatma", null);
+    if (!k) return `<a class="list khatma-start" href="#/khatma"><div class="row">📖 ابدأ ختمة<span class="n">حدّد وردك اليومي</span></div></a>`;
+    const last = store.get("lastRead", null);
+    const page = last ? pageOf(quran.surahs[last.s - 1].s + last.a - 1) : 1;
+    const days = Math.max(1, Math.ceil((604 - page) / k.pages));
+    const pct = Math.round((page / 604) * 100);
+    return `<a class="list khatma-start" href="#/khatma"><div class="row"><div style="flex:1">
+      <b>الختمة: صفحة ${arNum(page)} من ٦٠٤</b>
+      <div class="bar"><span style="width:${pct}%"></span></div>
+      <small>ورد اليوم ${arNum(k.pages)} صفحات · تكتمل خلال ${arNum(days)} يومًا تقريبًا</small>
+    </div></div></a>`;
+  }
+
+  async function khatmaView() {
+    currentTab = "quran"; setHeader("الختمة", true);
+    if (!(await loadQuran())) { view.innerHTML = `<p class="empty">تعذّر فتح المصحف</p>`; return; }
+    const k = store.get("khatma", null);
+    const last = store.get("lastRead", null);
+    const page = last ? pageOf(quran.surahs[last.s - 1].s + last.a - 1) : 1;
+    view.innerHTML = `
+      <p class="note">الختمة بتتحسب من آخر آية وصلت لها في المصحف. اختر وردك اليومي بالصفحات.</p>
+      <div class="list"><div class="row">الورد اليومي
+        <div class="seg">${[2, 4, 5, 10, 20].map((p) => `<button data-p="${p}" class="${k && k.pages === p ? "on" : ""}">${arNum(p)}</button>`).join("")}</div>
+      </div>
+      <div class="row">موضعك الحالي<b>صفحة ${arNum(page)} من ٦٠٤</b></div></div>
+      <div class="tools" style="margin-top:14px">
+        ${k ? `<button class="btn ghost" id="endK">إنهاء الختمة</button>` : ""}
+        <a class="btn" href="#/q">إلى المصحف</a></div>`;
+    view.querySelectorAll("[data-p]").forEach((b) => (b.onclick = () => {
+      store.set("khatma", { pages: +b.dataset.p, from: today() });
+      toast("تم ضبط الورد اليومي"); khatmaView();
+    }));
+    const end = $("#endK");
+    if (end) end.onclick = () => { store.set("khatma", null); toast("أُنهيت الختمة"); khatmaView(); };
+  }
 
   async function surah(n, goto) {
     n = Math.min(114, Math.max(1, +n || 1));
@@ -335,16 +542,25 @@
     const s = quran.surahs[n - 1];
     setHeader(s.t, true);
     const showAll = store.get("showTafsir", false); // tafsir under every ayah, or only on tap
+    const tm = tafsirMeta();
     view.innerHTML = `
-      <div class="surah-head"><h2>${esc(s.t)}</h2><small>${s.p}، ${arNum(s.c)} ${s.c===1?"آية":s.c===2?"آيتان":"آيات"}</small>
+      <div class="surah-head"><h2>${esc(s.t)}</h2><small>${s.p}، ${arNum(s.c)} ${s.c === 1 ? "آية" : s.c === 2 ? "آيتان" : "آيات"} · الجزء ${arNum(juzOf(s.s))}</small>
         ${n !== 9 ? `<p class="basmala">${esc(quran.ayahs[0])}</p>` : ""}</div>
-      <div class="tools"><button class="btn ghost" id="tafBtn">${showAll ? "✔ التفسير تحت كل آية" : "التفسير عند الضغط على الآية"}</button></div>
+      <div class="tools">
+        <button class="btn ghost" id="tafBtn">${showAll ? "✔ التفسير تحت كل آية" : "التفسير عند الضغط"}</button>
+        <button class="btn ghost" id="tafSwap">${esc(tm.t)} ⇄</button>
+      </div>
       <div class="mushaf ${showAll ? "show-all" : ""}" id="mushaf">
         ${Array.from({ length: s.c }, (_, i) => {
           const g = s.s + i;
-          return `<section class="ayah" data-a="${i + 1}" id="a${i + 1}">
+          return `<section class="ayah" data-a="${i + 1}" data-g="${g}" id="a${i + 1}">
             <p class="aya">${esc(quran.ayahs[g])} <span class="mark">${arNum(i + 1)}</span></p>
-            <div class="taf"><b>المختصر في التفسير</b>${esc(tafsir.ayahs[g])}</div></section>`;
+            <div class="taf"><b>${esc(tm.t)}</b>${esc(tafsirOf(g))}
+              <div class="ayah-acts">
+                <button class="act ${isMarked(g) ? "on" : ""}" data-mark="${g}" aria-label="حفظ">${isMarked(g) ? "★" : "☆"}</button>
+                <button class="act" data-copyayah="${g}" aria-label="نسخ">⧉</button>
+                <button class="act" data-img="${g}" aria-label="مشاركة كصورة">🖼</button>
+              </div></div></section>`;
         }).join("")}
       </div>
       <div class="navs">
@@ -355,9 +571,20 @@
       const on = !store.get("showTafsir", false);
       store.set("showTafsir", on);
       $("#mushaf").classList.toggle("show-all", on);
-      $("#tafBtn").textContent = on ? "✔ التفسير تحت كل آية" : "التفسير عند الضغط على الآية";
+      $("#tafBtn").textContent = on ? "✔ التفسير تحت كل آية" : "التفسير عند الضغط";
+    };
+    $("#tafSwap").onclick = async () => {
+      store.set("tafsirId", tafsirId() === 1 ? 2 : 1);
+      toast("التفسير: " + tafsirMeta().t);
+      await surah(n, goto);
     };
     view.onclick = (e) => {
+      const markBtn = e.target.closest("[data-mark]");
+      if (markBtn) { e.stopPropagation(); return toggleBookmark(+markBtn.dataset.mark, markBtn); }
+      const copyBtn = e.target.closest("[data-copyayah]");
+      if (copyBtn) { e.stopPropagation(); const g = +copyBtn.dataset.copyayah; const r = ayahRef(g); return copy(`${quran.ayahs[g]}\n[${r.t}: ${r.a}]`); }
+      const imgBtn = e.target.closest("[data-img]");
+      if (imgBtn) { e.stopPropagation(); const g = +imgBtn.dataset.img; const r = ayahRef(g); return shareImage(quran.ayahs[g], `${r.t} — الآية ${arNum(r.a)}`); }
       const sec = e.target.closest(".ayah");
       if (!sec) return;
       sec.classList.toggle("open");
@@ -365,6 +592,215 @@
     };
     if (goto) view.querySelector("#a" + (+goto))?.scrollIntoView({ block: "center" });
     store.set("lastRead", { s: n, a: +goto || 1 });
+  }
+  const juzOf = (g) => { let j = 1; quran.juz.forEach((x) => { if (x.s <= g) j = x.n; }); return j; };
+
+  // ---------- prayer times (computed on the device, works offline) ----------
+  const CITIES = [
+    ["القاهرة", 30.0444, 31.2357], ["الإسكندرية", 31.2001, 29.9187], ["الجيزة", 30.0131, 31.2089],
+    ["المنصورة", 31.0409, 31.3785], ["طنطا", 30.7865, 31.0004], ["أسيوط", 27.1783, 31.1859],
+    ["الأقصر", 25.6872, 32.6396], ["أسوان", 24.0889, 32.8998], ["بورسعيد", 31.2653, 32.3019],
+    ["السويس", 29.9668, 32.5498], ["مكة المكرمة", 21.3891, 39.8579], ["المدينة المنورة", 24.5247, 39.5692],
+    ["الرياض", 24.7136, 46.6753], ["جدة", 21.4858, 39.1925], ["دبي", 25.2048, 55.2708],
+    ["الدوحة", 25.2854, 51.5310], ["الكويت", 29.3759, 47.9774], ["عمّان", 31.9454, 35.9284],
+    ["بيروت", 33.8938, 35.5018], ["بغداد", 33.3152, 44.3661], ["الخرطوم", 15.5007, 32.5599],
+    ["تونس", 36.8065, 10.1815], ["الجزائر", 36.7538, 3.0588], ["الرباط", 34.0209, -6.8416],
+    ["إسطنبول", 41.0082, 28.9784], ["لندن", 51.5074, -0.1278], ["باريس", 48.8566, 2.3522],
+    ["برلين", 52.52, 13.405], ["نيويورك", 40.7128, -74.006], ["تورونتو", 43.6532, -79.3832],
+  ];
+  const METHODS = [
+    ["Egyptian", "الهيئة المصرية العامة للمساحة"],
+    ["UmmAlQura", "أم القرى (السعودية)"],
+    ["MuslimWorldLeague", "رابطة العالم الإسلامي"],
+    ["Dubai", "دبي"], ["Kuwait", "الكويت"], ["Qatar", "قطر"],
+    ["NorthAmerica", "أمريكا الشمالية (ISNA)"], ["Karachi", "كراتشي"],
+    ["Turkey", "تركيا"], ["Tehran", "طهران"],
+  ];
+  const PRAYERS = [["fajr", "الفجر"], ["sunrise", "الشروق"], ["dhuhr", "الظهر"], ["asr", "العصر"], ["maghrib", "المغرب"], ["isha", "العشاء"]];
+
+  const place = () => store.get("place", null); // {t, lat, lng}
+  const method = () => { const m = store.get("prayerMethod", "Egyptian"); return window.adhan?.CalculationMethod?.[m] ? m : "Egyptian"; };
+  const fmtTime = (d) => d.toLocaleTimeString("ar-EG", { hour: "2-digit", minute: "2-digit", hour12: true });
+
+  function prayerTimesFor(date) {
+    const p = place();
+    if (!p || !window.adhan) return null;
+    const params = (window.adhan.CalculationMethod[method()] || window.adhan.CalculationMethod.Egyptian)();
+    return new window.adhan.PrayerTimes(new window.adhan.Coordinates(p.lat, p.lng), date, params);
+  }
+
+  function nextPrayer() {
+    const t = prayerTimesFor(new Date());
+    if (!t) return null;
+    const now = new Date();
+    for (const [k, name] of PRAYERS) {
+      if (k === "sunrise") continue;
+      if (t[k] > now) return { k, name, at: t[k] };
+    }
+    const tomorrow = prayerTimesFor(new Date(Date.now() + 864e5));
+    return tomorrow ? { k: "fajr", name: "الفجر", at: tomorrow.fajr } : null;
+  }
+
+  let prayerTimer = null;
+  function prayerView() {
+    currentTab = "prayer"; setHeader("مواقيت الصلاة", true);
+    clearInterval(prayerTimer);
+    const p = place();
+    if (!p) return prayerSetup();
+    const t = prayerTimesFor(new Date());
+    if (!t) { view.innerHTML = `<p class="empty">تعذّر حساب المواقيت</p>`; return; }
+    const nx = nextPrayer();
+    view.innerHTML = `
+      <section class="hero"><small>${esc(p.t)}</small><h2 id="nextP">${nx ? nx.name + " بعد " + remain(nx.at) : ""}</h2>
+        <small id="nextT">${nx ? fmtTime(nx.at) : ""}</small></section>
+      <div class="list">${PRAYERS.map(([k, name]) => `<div class="row ${nx && nx.k === k ? "now" : ""}">
+        <span>${name}</span><b>${fmtTime(t[k])}</b></div>`).join("")}</div>
+      <div class="tools" style="margin-top:14px">
+        <a class="btn ghost" href="#/prayer/setup">📍 تغيير المدينة</a>
+        <button class="btn ghost" id="notifP">🔔 تنبيه قبل الأذان</button>
+      </div>
+      <p class="note">المواقيت تُحسب على جهازك بدون إنترنت، بطريقة: ${esc((METHODS.find((m) => m[0] === method()) || [])[1] || "")}.</p>`;
+    prayerTimer = setInterval(() => {
+      const n = nextPrayer();
+      const el = $("#nextP");
+      if (n && el) el.textContent = n.name + " بعد " + remain(n.at);
+    }, 30000);
+    $("#notifP").onclick = () => (location.hash = "#/reminders");
+  }
+  const remain = (d) => {
+    const m = Math.max(0, Math.round((d - Date.now()) / 60000));
+    return m >= 60 ? `${arNum(Math.floor(m / 60))} س ${arNum(m % 60)} د` : `${arNum(m)} دقيقة`;
+  };
+
+  function prayerSetup() {
+    currentTab = "prayer"; setHeader("مواقيت الصلاة", true);
+    view.innerHTML = `
+      <p class="note">اختر مدينتك، أو حدّد موقعك تلقائيًا. تُحفظ على جهازك فقط ولا تُرسل لأي مكان.</p>
+      <div class="tools"><button class="btn" id="geo">📍 تحديد موقعي تلقائيًا</button></div>
+      <h3 class="sec">أو اختر مدينة</h3>
+      <div class="list">${CITIES.map(([t, lat, lng], i) => `<a href="#" data-city="${i}">${t}${place()?.t === t ? '<span class="ok">✔</span>' : ""}</a>`).join("")}</div>
+      <h3 class="sec">طريقة الحساب</h3>
+      <div class="list">${METHODS.map(([k, t]) => `<a href="#" data-method="${k}">${t}${method() === k ? '<span class="ok">✔</span>' : ""}</a>`).join("")}</div>`;
+    $("#geo").onclick = async () => {
+      toast("جارٍ تحديد الموقع…");
+      try {
+        // the installed app asks through the Capacitor plugin; the browser uses its own API
+        const Geo = window.Capacitor?.Plugins?.Geolocation;
+        let pos;
+        if (Geo) {
+          const perm = await Geo.requestPermissions({ permissions: ["location"] });
+          if (perm.location === "denied") { toast("لم يُسمح بالوصول للموقع — اختر مدينة"); return; }
+          pos = await Geo.getCurrentPosition({ timeout: 15000, enableHighAccuracy: false });
+        } else {
+          pos = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, { timeout: 15000, enableHighAccuracy: false }));
+        }
+        store.set("place", { t: "موقعي الحالي", lat: pos.coords.latitude, lng: pos.coords.longitude });
+        scheduleAll(); location.hash = "#/prayer";
+      } catch { toast("تعذّر تحديد الموقع — اختر مدينة من القائمة"); }
+    };
+    view.onclick = (e) => {
+      const c = e.target.closest("[data-city]"), m = e.target.closest("[data-method]");
+      if (c) {
+        e.preventDefault();
+        const [t, lat, lng] = CITIES[+c.dataset.city];
+        store.set("place", { t, lat, lng });
+        scheduleAll(); location.hash = "#/prayer";
+      } else if (m) {
+        e.preventDefault();
+        store.set("prayerMethod", m.dataset.method);
+        scheduleAll(); prayerSetup();
+      }
+    };
+  }
+
+  // ---------- reminders (local notifications on the installed app) ----------
+  const LN = () => window.Capacitor?.Plugins?.LocalNotifications;
+  const defaultReminders = () => ({
+    morning: { on: false, h: 6, m: 30, t: "أذكار الصباح", link: "#/c/133" },
+    evening: { on: false, h: 17, m: 30, t: "أذكار المساء", link: "#/c/134" },
+    sleep: { on: false, h: 22, m: 30, t: "أذكار النوم", link: "#/c/2" },
+    prayer: { on: false, before: 10 },
+  });
+  const reminders = () => Object.assign(defaultReminders(), store.get("reminders", {}));
+
+  async function scheduleAll() {
+    const ln = LN();
+    if (!ln) return false;
+    try {
+      const r = reminders();
+      const pending = await ln.getPending();
+      if (pending.notifications?.length) await ln.cancel({ notifications: pending.notifications });
+      const list = [];
+      let id = 1;
+      [["morning", "🌅"], ["evening", "🌇"], ["sleep", "🌙"]].forEach(([k, icon]) => {
+        if (!r[k].on) return;
+        list.push({
+          id: id++, title: `${icon} ${r[k].t}`, body: "حان وقت الأذكار — بارك الله فيك",
+          schedule: { on: { hour: r[k].h, minute: r[k].m }, allowWhileIdle: true },
+          extra: { link: r[k].link },
+        });
+      });
+      if (r.prayer.on && place()) {
+        // the next three days of prayers; rescheduled whenever the app opens
+        for (let d = 0; d < 3; d++) {
+          const t = prayerTimesFor(new Date(Date.now() + d * 864e5));
+          if (!t) break;
+          PRAYERS.forEach(([k, name]) => {
+            if (k === "sunrise") return;
+            const at = new Date(t[k].getTime() - r.prayer.before * 60000);
+            if (at <= new Date()) return;
+            list.push({ id: id++, title: `🕌 ${name}`, body: `أذان ${name} بعد ${r.prayer.before} دقيقة`, schedule: { at, allowWhileIdle: true } });
+          });
+        }
+      }
+      if (list.length) await ln.schedule({ notifications: list });
+      return true;
+    } catch { return false; }
+  }
+
+  async function remindersView() {
+    currentTab = "settings"; setHeader("التنبيهات", true);
+    const ln = LN();
+    const r = reminders();
+    const row = (k, label) => `<div class="row"><span>${label}<small class="sub">${arNum(String(r[k].h).padStart(2, "0"))}:${arNum(String(r[k].m).padStart(2, "0"))}</small></span>
+      <span style="display:flex;gap:8px;align-items:center">
+        <input type="time" class="tinput" data-time="${k}" value="${String(r[k].h).padStart(2, "0")}:${String(r[k].m).padStart(2, "0")}">
+        <button class="sw ${r[k].on ? "on" : ""}" data-toggle="${k}" aria-label="تشغيل"></button></span></div>`;
+    view.innerHTML = `
+      ${ln ? "" : `<p class="note">التنبيهات تعمل في تطبيق الأندرويد فقط. على المتصفح لن تصل إشعارات.</p>`}
+      <div class="list">
+        ${row("morning", "أذكار الصباح")}
+        ${row("evening", "أذكار المساء")}
+        ${row("sleep", "أذكار النوم")}
+      </div>
+      <h3 class="sec">الصلاة</h3>
+      <div class="list">
+        <div class="row"><span>تنبيه قبل الأذان<small class="sub">${place() ? esc(place().t) : "اختر مدينتك أولًا"}</small></span>
+          <span style="display:flex;gap:8px;align-items:center">
+            <div class="seg">${[5, 10, 15, 30].map((v) => `<button data-before="${v}" class="${r.prayer.before === v ? "on" : ""}">${arNum(v)}د</button>`).join("")}</div>
+            <button class="sw ${r.prayer.on ? "on" : ""}" data-toggle="prayer"></button></span></div>
+        ${place() ? "" : `<div class="row"><a class="btn ghost" href="#/prayer/setup">📍 تحديد المدينة</a></div>`}
+      </div>`;
+    view.onclick = async (e) => {
+      const tg = e.target.closest("[data-toggle]"), bf = e.target.closest("[data-before]");
+      if (tg) {
+        const k = tg.dataset.toggle, next = { ...r, [k]: { ...r[k], on: !r[k].on } };
+        if (next[k].on && ln) {
+          const perm = await ln.requestPermissions();
+          if (perm.display !== "granted") { toast("لم يُسمح بالإشعارات"); return; }
+        }
+        store.set("reminders", next);
+        buzz(); await scheduleAll(); remindersView();
+      } else if (bf) {
+        store.set("reminders", { ...r, prayer: { ...r.prayer, before: +bf.dataset.before } });
+        await scheduleAll(); remindersView();
+      }
+    };
+    view.querySelectorAll("[data-time]").forEach((inp) => (inp.onchange = async () => {
+      const [h, m] = inp.value.split(":").map(Number);
+      store.set("reminders", { ...r, [inp.dataset.time]: { ...r[inp.dataset.time], h, m } });
+      await scheduleAll(); remindersView();
+    }));
   }
 
   // ---------- hadiths ----------
@@ -394,6 +830,7 @@
         <div class="foot">
           <button class="act" data-act="copy" aria-label="نسخ">⧉</button>
           <button class="act" data-act="share" aria-label="مشاركة">↗</button>
+          <button class="act" data-act="img" aria-label="مشاركة كصورة">🖼</button>
           <span class="badges"><b class="grade">${esc(h.g)}</b><b>${esc(h.a)}</b></span>
         </div></article>
       <h3 class="sec">الشرح</h3>
@@ -407,6 +844,7 @@
       const text = `${h.h}\n[${h.a}]`;
       if (act === "copy") copy(text);
       if (act === "share") share(text, h.t);
+      if (act === "img") shareImage(h.h, h.a);
     };
   }
 
@@ -431,6 +869,7 @@
   function route() {
     const [, a, b, c] = location.hash.split("/");
     view.onclick = null;
+    clearInterval(prayerTimer);
     if (a === "c") category(+b, c);
     else if (a === "g") group(b);
     else if (a === "all") allCats();
@@ -438,7 +877,10 @@
     else if (a === "tasbih") tasbih();
     else if (a === "settings") settingsView();
     else if (a === "about") about();
-    else if (a === "q") (b ? surah(b, c) : quranIndex());
+    else if (a === "q") (b === "m" ? quranIndex(c) : b ? surah(b, c) : quranIndex());
+    else if (a === "khatma") khatmaView();
+    else if (a === "prayer") (b === "setup" ? prayerSetup() : prayerView());
+    else if (a === "reminders") remindersView();
     else if (a === "h") (b ? hadithList(b) : hadithTopics());
     else if (a === "hd") hadith(b);
     else home();
@@ -478,6 +920,17 @@
     } catch {}
   }
   setTimeout(refreshContent, 1500);
+
+  // Re-arm reminders on every launch (prayer alerts are only scheduled a few days ahead).
+  const ln0 = LN();
+  if (ln0) {
+    scheduleAll();
+    ln0.addListener("localNotificationActionPerformed", (e) => {
+      const link = e?.notification?.extra?.link;
+      if (link) location.hash = link;
+    });
+    document.addEventListener("resume", scheduleAll);
+  }
 
   if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js").catch(() => {});
 })();

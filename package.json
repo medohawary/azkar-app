@@ -9,11 +9,16 @@
     "android:build": "npm run prepare_app && npx cap sync android && cd android && ./gradlew assembleRelease",
     "android:sync": "npx cap sync android",
     "android:open": "npx cap open android",
-    "prepare_app": "rm -rf app-dist && mkdir app-dist && cp www/index.html www/style.css www/app.js www/data.js www/quran.json www/tafsir.json www/icon.svg www/icon-192.png www/icon-512.png www/manifest.webmanifest app-dist/"
+    "prepare_app": "rm -rf app-dist && mkdir app-dist && cp www/index.html www/style.css www/app.js www/adhan.js www/data.js www/quran.json www/tafsir.json www/tafsir2.json www/quran-font.woff2 www/icon.svg www/icon-192.png www/icon-512.png www/manifest.webmanifest app-dist/"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.2",
     "@capacitor/cli": "^8.5.2",
-    "@capacitor/core": "^8.5.2"
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/filesystem": "^8.1.3",
+    "@capacitor/geolocation": "^8.2.2",
+    "@capacitor/local-notifications": "^8.3.1",
+    "@capacitor/share": "^8.0.2",
+    "adhan": "^4.4.6"
   }
 }

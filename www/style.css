@@ -168,3 +168,35 @@ ul.body li { margin-bottom: 8px; }
 .ayah .taf b { display: block; color: var(--brand); font-size: 13px; margin-bottom: 4px; }
 .mushaf.show-all .ayah .taf { display: block; padding-top: 12px; }
 .navs { display: flex; justify-content: space-between; gap: 10px; margin: 16px 0 6px; }
+
+@font-face { font-family: "QuranFont"; src: url("quran-font.woff2") format("woff2"); font-display: swap; }
+.ayah .aya, .basmala { font-family: "QuranFont", "Noto Naskh Arabic", "Geeza Pro", serif; }
+.segchips { margin-bottom: 14px; }
+.segchips .chip { text-decoration: none; color: inherit; }
+.segchips .chip.on { color: #fff; }
+.list .mini { flex: 1; font-size: 15px; }
+.khatma-start { display: block; text-decoration: none; color: inherit; margin-bottom: 14px; }
+.khatma-start .row b { display: block; margin-bottom: 8px; }
+.khatma-start .row small { color: var(--muted); }
+.bar { height: 8px; border-radius: 99px; background: var(--line); overflow: hidden; margin-bottom: 8px; }
+.bar span { display: block; height: 100%; background: var(--gold); }
+.ayah-acts { display: flex; gap: 4px; margin-top: 10px; }
+.ayah-acts .act { background: none; border: 0; font-size: 18px; color: var(--muted); cursor: pointer; width: 38px; height: 34px; border-radius: 9px; }
+.ayah-acts .act.on { color: var(--gold); }
+.list .act { background: none; border: 0; color: var(--muted); font-size: 15px; cursor: pointer; padding: 4px 8px; }
+.chart { display: flex; align-items: flex-end; justify-content: space-between; gap: 6px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 10px; }
+.chart .col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.chart .col b { font-size: 11px; color: var(--muted); font-weight: 600; min-height: 14px; }
+.chart .col i { width: 100%; max-width: 26px; border-radius: 7px 7px 0 0; background: linear-gradient(180deg, var(--brand-2), var(--brand)); }
+.chart .col small { font-size: 10px; color: var(--muted); }
+
+.pstrip { display: flex; align-items: center; gap: 8px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; text-decoration: none; color: var(--ink); font-size: 14px; box-shadow: var(--shadow); }
+.pstrip b { color: var(--brand); }
+.pstrip span { margin-inline-start: auto; color: var(--muted); }
+.row.now { background: var(--soft); }
+.row.now b { color: var(--brand); }
+.sw { width: 46px; height: 28px; border-radius: 99px; border: 0; background: var(--line); position: relative; cursor: pointer; transition: background .2s; }
+.sw::after { content: ""; position: absolute; top: 3px; right: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; transition: transform .2s; }
+.sw.on { background: var(--brand); }
+.sw.on::after { transform: translateX(-18px); }
+.tinput { font: inherit; font-size: 14px; padding: 6px 8px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
